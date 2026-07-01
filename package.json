@@ -1,0 +1,23 @@
+{
+  "name": "aksvapi",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./svelte-kit": "./src/svelte-kit.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test"
+  },
+  "dependencies": {
+    "better-auth": "^1.6.22",
+    "jose": "^6.2.3",
+    "lodash": "^4.18.1",
+    "pino": "^10.3.1",
+    "pino-roll": "^4.0.0"
+  }
+}
