@@ -53,15 +53,24 @@ In a new project, wrap the authentication service in a server-side module (e.g. 
 ```typescript
 import { AuthService } from 'aksvapi';
 import { env } from '$env/dynamic/private';
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
 import path from 'node:path';
+
+const dataDir = path.resolve(env.DATA_DIR || './data');
+fs.mkdirSync(dataDir, { recursive: true });
+
+// Instantiate and configure the database
+const db = new DatabaseSync(path.join(dataDir, 'auth.db'));
+db.exec('PRAGMA journal_mode = WAL;');
 
 // Initialise the AuthService instance
 export const authService = new AuthService({
   // Required: JWT/cookie signing secret (minimum 32 characters)
   secret: env.AUTH_SECRET,
   
-  // Required: Path to the SQLite database
-  dbFilename: path.join(env.DATA_DIR || './data', 'auth.db'),
+  // Required: The configured DatabaseSync instance
+  db,
   
   // Required: Public origin of the application
   baseURL: env.ORIGIN || 'http://localhost:5173',
@@ -155,9 +164,27 @@ export const PUT = async ({ request, locals }) => {
   const body = await request.json();
   const userId = locals.user.id;
 
-  const updateStmt = auth.options.database.prepare('UPDATE user SET profileData = ? WHERE id = ?');
+  const updateStmt = db.prepare('UPDATE user SET profileData = ? WHERE id = ?');
   updateStmt.run(JSON.stringify(body.newProfile), userId);
 
   return new Response(JSON.stringify({ success: true }));
 };
 ```
+
+### 4. Sharing the SQLite Database
+
+Since `AuthService` strictly requires a `DatabaseSync` instance passed in from the host application, sharing the database connection is built-in and straightforward:
+
+1. **Instantiation**: The host application creates the `DatabaseSync` instance, configures any system-level pragmas, and passes it to `AuthService`:
+   ```typescript
+   import { DatabaseSync } from 'node:sqlite';
+   export const db = new DatabaseSync('path/to/db.sqlite');
+   db.exec('PRAGMA journal_mode = WAL;');
+   ```
+2. **Accessing the Connection**: Since your host application owns the `db` instance, you can use the same connection to query custom tables, run transactions, or query the default `user` and `session` tables without opening the file again:
+   ```typescript
+   import { db } from '$lib/server/AuthService';
+   
+   const user = db.prepare('SELECT * FROM user WHERE id = ?').get(userId);
+   ```
+

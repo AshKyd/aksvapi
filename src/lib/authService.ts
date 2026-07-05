@@ -2,14 +2,12 @@ import { betterAuth } from 'better-auth';
 import { APIError } from 'better-auth/api';
 import { bearer } from 'better-auth/plugins';
 import { DatabaseSync } from 'node:sqlite';
-import fs from 'node:fs';
-import path from 'node:path';
 import { getMigrations } from 'better-auth/db/migration';
 import { logger } from './logger.ts';
 
 export interface AuthServiceOptions {
 	secret: string;
-	dbFilename: string;
+	db: DatabaseSync;
 	baseURL: string;
 	cookiePath?: string;
 	seedEmail?: string;
@@ -22,6 +20,7 @@ export class AuthService {
 	private initPromise: Promise<void> | null = null;
 	private options: AuthServiceOptions;
 	private _isSeeding: boolean = false;
+	private _db: DatabaseSync;
 
 	constructor(options: AuthServiceOptions) {
 		if (!options.secret || options.secret.length < 32) {
@@ -29,14 +28,10 @@ export class AuthService {
 		}
 
 		this.options = options;
-		
-		fs.mkdirSync(path.dirname(options.dbFilename), { recursive: true });
-
-		const db = new DatabaseSync(options.dbFilename);
-		db.exec('PRAGMA journal_mode = WAL;');
+		this._db = options.db;
 
 		this.auth = betterAuth({
-			database: db,
+			database: this._db,
 			secret: options.secret,
 			baseURL: options.baseURL,
 			emailAndPassword: {

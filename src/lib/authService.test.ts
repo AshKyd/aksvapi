@@ -1,40 +1,25 @@
-import { test, describe, after, beforeEach } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { AuthService } from './authService.ts';
 
 describe('AuthService (Better Auth)', () => {
 	const secret = 'test-auth-service-secret-key-very-long';
-	const dbFilename = 'test-auth.db';
 	const baseURL = 'http://localhost:3000';
 
-	// Clean up database files after tests run
-	after(() => {
-		try {
-			if (fs.existsSync(dbFilename)) {
-				fs.unlinkSync(dbFilename);
-			}
-			if (fs.existsSync(`${dbFilename}-wal`)) {
-				fs.unlinkSync(`${dbFilename}-wal`);
-			}
-			if (fs.existsSync(`${dbFilename}-shm`)) {
-				fs.unlinkSync(`${dbFilename}-shm`);
-			}
-		} catch (e) {
-			// ignore cleanup errors
-		}
-	});
-
 	test('Initialization requires min 32 characters secret', () => {
+		const db = new DatabaseSync(':memory:');
 		assert.throws(() => {
-			new AuthService({ secret: 'short', dbFilename, baseURL });
+			new AuthService({ secret: 'short', db, baseURL });
 		}, /Secret must be at least 32 characters long/);
 	});
 
 	test('Initialization and seeding user', async () => {
+		const db = new DatabaseSync(':memory:');
+		db.exec('PRAGMA journal_mode = WAL;');
 		const authService = new AuthService({
 			secret,
-			dbFilename,
+			db,
 			baseURL,
 			seedEmail: 'admin@example.com',
 			seedPassword: 'securepassword123'
@@ -59,9 +44,11 @@ describe('AuthService (Better Auth)', () => {
 	});
 
 	test('ProfileData field is available on user', async () => {
+		const db = new DatabaseSync(':memory:');
+		db.exec('PRAGMA journal_mode = WAL;');
 		const authService = new AuthService({
 			secret,
-			dbFilename,
+			db,
 			baseURL,
 			seedEmail: 'profile@example.com',
 			seedPassword: 'securepassword123'
@@ -82,7 +69,7 @@ describe('AuthService (Better Auth)', () => {
 		assert.strictEqual(sessionResponse.user.profileData, '{}');
 
 		const newProfileData = '{"test":true}';
-		const updateStmt = authService.auth.options.database.prepare('UPDATE user SET profileData = ? WHERE id = ?');
+		const updateStmt = db.prepare('UPDATE user SET profileData = ? WHERE id = ?');
 		updateStmt.run(newProfileData, sessionResponse.user.id);
 
 		// Fetch session to verify it updated
